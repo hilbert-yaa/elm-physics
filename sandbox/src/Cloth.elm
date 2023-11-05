@@ -25,6 +25,7 @@ import Physics.World as World exposing (World)
 import Point3d
 import Sphere3d
 import WebGL exposing (Mesh)
+import Task
 
 
 particlesPerDimension : Int
