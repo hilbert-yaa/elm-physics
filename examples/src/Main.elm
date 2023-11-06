@@ -36,7 +36,6 @@ import Physics.World as World exposing (World)
 import Pixels exposing (Pixels)
 import Plane3d
 import Point3d exposing (Point3d)
-import Frame3d exposing (Frame3d)
 import Quantity exposing (Quantity)
 import RaycastCar.Car as Car exposing (Wheel)
 import RaycastCar.Jeep as Jeep exposing (Jeep)
@@ -250,7 +249,7 @@ view { world, fps, jeep, dimensions } =
             { upDirection = Direction3d.z
             , sunlightDirection = Direction3d.xyZ (Angle.degrees -15) (Angle.degrees -45)
             , shadows = True
-            , camera = camera
+            , camera = camera world
             , dimensions = dimensions
             , background = Scene3d.transparentBackground
             , clipDepth = Length.meters 0.1
@@ -260,13 +259,48 @@ view { world, fps, jeep, dimensions } =
         ]
 
 
-camera : Camera3d Meters WorldCoordinates
-camera =
+getCar : World Id -> Maybe (Body Id)
+getCar world =
+    List.filter
+        (\body ->
+            case Body.data body of
+                Car _ ->
+                    True
+
+                _ ->
+                    False
+        )
+        (World.bodies world)
+        |> List.head
+
+
+camera : World Id -> Camera3d Meters WorldCoordinates
+camera world =
+    let
+        maybeJeep =
+            getCar world
+
+        ( carPosition, carDirection ) =
+            case maybeJeep of
+                Just jeep ->
+                    Body.frame jeep
+                        |> (\frame ->
+                                ( Frame3d.originPoint frame, Frame3d.yDirection frame )
+                           )
+
+                Nothing ->
+                    ( Point3d.meters 0 0 0, Direction3d.positiveX )
+
+        eyePoint =
+            carPosition
+                |> Point3d.translateIn Direction3d.positiveZ (Length.meters 20)
+                |> Point3d.translateIn carDirection (Length.meters -40)
+    in
     Camera3d.perspective
         { viewpoint =
             Viewpoint3d.lookAt
-                { eyePoint = Point3d.meters 0 -60 30
-                , focalPoint = Point3d.meters 0 0 -7
+                { eyePoint = eyePoint
+                , focalPoint = carPosition
                 , upDirection = Direction3d.positiveZ
                 }
         , verticalFieldOfView = Angle.degrees 30
