@@ -54,7 +54,7 @@ type alias Wheel id =
     , suspensionImpulse : Quantity Float (Quantity.Product Force.Newtons Duration.Seconds)
     , suspensionLength : Length
     , engineForce : Force
-    , brake : Force
+    , resistance : Force
     , contact :
         Maybe
             { point : Point3d Meters WorldCoordinates
@@ -71,36 +71,31 @@ simulate :
         { worldWithoutCar : World id
         , speeding : Float
         , steering : Float
-        , braking : Bool
+        , resisting : Float
         }
     -> List (Wheel id)
     -> Body id
     -> ( Body id, List (Wheel id) )
-simulate carSettings dt { worldWithoutCar, steering, braking, speeding } wheels carBody =
+simulate carSettings dt { worldWithoutCar, steering, resisting, speeding } wheels carBody =
     case wheels of
         [ w1, w2, w3, w4 ] ->
             let
                 engineForce =
                     Force.newtons (5000 * speeding)
 
-                brake =
-                    if braking then
-                        Force.newtons 10000
-
-                    else
-                        Quantity.zero
+                resistance = Force.newtons resisting
 
                 wheel1 =
-                    { w1 | steering = Angle.degrees (30 * steering), engineForce = engineForce, brake = brake }
+                    { w1 | steering = Angle.degrees (30 * steering), engineForce = engineForce, resistance = resistance }
 
                 wheel2 =
-                    { w2 | steering = Angle.degrees (30 * steering), engineForce = engineForce, brake = brake }
+                    { w2 | steering = Angle.degrees (30 * steering), engineForce = engineForce, resistance = resistance }
 
                 wheel3 =
-                    { w3 | engineForce = engineForce, brake = brake }
+                    { w3 | engineForce = engineForce, resistance = resistance }
 
                 wheel4 =
-                    { w4 | engineForce = engineForce, brake = brake }
+                    { w4 | engineForce = engineForce, resistance = resistance }
             in
             updateSuspension carSettings dt worldWithoutCar (Body.frame carBody) carBody [ wheel1, wheel2, wheel3, wheel4 ] carBody [] 0
 
@@ -288,18 +283,18 @@ updateFriction carSettings dt world frame updatedCar numWheelsOnGround currentWh
                             resolveSingleBilateral updatedCar body point axle
 
                         maxImpulse =
-                            if wheel.brake == Quantity.zero then
+                            if wheel.resistance == Quantity.zero then
                                 -- TODO: think about default rolling friction impulse
                                 Quantity.zero
 
                             else
-                                Quantity.times dt wheel.brake
+                                Quantity.times dt wheel.resistance
 
                         forwardImpulse =
                             Quantity.times dt wheel.engineForce
                                 |> Quantity.plus (calcRollingFriction updatedCar body point forward maxImpulse numWheelsOnGround)
 
-                        -- Switch between active rolling (throttle), braking and non-active rolling friction (nthrottle/break)
+                        -- Switch between active rolling (throttle), resisting and non-active rolling friction (nthrottle/break)
                         maximpSide =
                             Quantity.multiplyBy carSettings.frictionSlip wheel.suspensionImpulse
 
@@ -552,6 +547,6 @@ defaultWheel =
     , suspensionImpulse = Quantity.zero
     , suspensionLength = Quantity.zero
     , engineForce = Quantity.zero
-    , brake = Quantity.zero
+    , resistance = Quantity.zero
     , contact = Nothing
     }

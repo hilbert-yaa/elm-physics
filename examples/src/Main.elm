@@ -51,6 +51,26 @@ noCmd model =
     ( model, Cmd.none )
 
 
+jeepMassInKilograms : Float
+jeepMassInKilograms =
+    4000
+
+
+gVal : Float
+gVal =
+    9.8
+
+
+fVal : Float
+fVal =
+    0.02
+
+
+jeepGroundFriction : Float -> Float
+jeepGroundFriction frictionCoeff =
+    jeepMassInKilograms * gVal * frictionCoeff
+
+
 type Id
     = Obstacle (Block3d Meters BodyCoordinates)
     | Floor
@@ -65,7 +85,7 @@ type alias Model =
     , firstTick : Bool
     , speeding : Float
     , steering : Float
-    , braking : Bool
+    , resisting : Float
     }
 
 
@@ -103,7 +123,7 @@ init _ =
       , firstTick = True
       , speeding = 0
       , steering = 0
-      , braking = False
+      , resisting = 0
       }
     , Cmd.batch
         [ Task.perform
@@ -132,15 +152,19 @@ update msg model =
         JeepLoaded result ->
             case result of
                 Ok jeep ->
-                    { model
-                        | jeep = Just jeep
-                        , world =
+                    let
+                        world =
                             World.add
                                 (Body.compound jeep.collider (Car (Jeep.wheels jeep))
                                     |> Body.withBehavior (Body.dynamic (Mass.kilograms 4000))
                                     |> Body.moveTo (Point3d.meters 0 0 4)
                                 )
                                 model.world
+                    in
+                    { model
+                        | jeep = Just jeep
+                        , world = world
+                        , resisting = jeepGroundFriction fVal
                     }
                         |> noCmd
 
@@ -175,7 +199,7 @@ update msg model =
                                                                     model.world
                                                             , speeding = model.speeding
                                                             , steering = model.steering
-                                                            , braking = model.braking
+                                                            , resisting = model.resisting
                                                             }
                                                             wheels
                                                             body
@@ -226,10 +250,10 @@ update msg model =
                 |> noCmd
 
         KeyDown Brake ->
-            { model | braking = True } |> noCmd
+            { model | resisting = jeepGroundFriction fVal + 10000 } |> noCmd
 
         KeyUp Brake ->
-            { model | braking = False } |> noCmd
+            { model | resisting = jeepGroundFriction fVal } |> noCmd
 
         KeyDown Restart ->
             model |> noCmd
@@ -388,7 +412,7 @@ bodyToEntity maybeJeep body =
 initialWorld : World Id
 initialWorld =
     World.empty
-        |> World.withGravity (Acceleration.metersPerSecondSquared 9.8) Direction3d.negativeZ
+        |> World.withGravity (Acceleration.metersPerSecondSquared gVal) Direction3d.negativeZ
         |> World.add (Body.plane Floor)
         |> World.add slope
         |> World.add (box (Point3d.meters 15 -15 0.5))
@@ -448,6 +472,9 @@ keyDecoder toMsg =
 
                     "s" ->
                         Json.Decode.succeed (toMsg (Speed -1))
+
+                    "t" ->
+                        Json.Decode.succeed (toMsg (Speed 3))
 
                     "b" ->
                         Json.Decode.succeed (toMsg Brake)
